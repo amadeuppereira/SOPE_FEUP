@@ -111,6 +111,38 @@ void processFile(const char* path, const char* pattern) {
     fclose(f);
 }
 
+int isAtBeginning(const char* str1, const char* str2)
+{
+  char local_buffer[BUFFER_SIZE];
+  memcpy(local_buffer, str1, strlen(str2));
+  local_buffer[strlen(str2)] = 0;
+
+  if (strcmp(local_buffer, str2) == 0) //str2 is in the begin of buffer
+     return 0;
+  else
+     return -1;
+
+
+}
+
+
+int checkWConditions(char c)
+{
+  if ( c >= '0' && c <= '9')
+    return -1;
+
+  if (c >= 'A' && c <= 'Z')
+    return -1;
+
+  if (c >= 'a' && c <= 'z')
+    return -1;
+
+  if (c == '_')
+    return -1;
+
+  return 0;
+}
+
 int strContains(const char* str1, const char* str2) {
 
   if(optionI && !optionW) { // -i
@@ -123,7 +155,19 @@ int strContains(const char* str1, const char* str2) {
     }
   }
   else if(!optionI && optionW) { // -w
-    return 0;
+
+    char* temporary_string = strstr(str1,str2);
+    if (temporary_string == NULL)
+        return 0;
+
+    if( ((isAtBeginning(str1, str2) == 0) || (checkWConditions(temporary_string[strlen(str2)] == 0))) && ((strcmp(temporary_string, str2) == 0) || (checkWConditions(*(temporary_string - 1)) == 0)))
+       {
+         return 1;
+       } 
+    else
+    {
+      return 0;
+    }
   }
   else if(optionI && optionW) { //-i -w
     return 0;
