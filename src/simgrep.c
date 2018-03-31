@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
     }
     else {
       /*
-      TODO: -w option
+      TODO: -r option
       */
     }
   }
