@@ -10,6 +10,7 @@
 #include <ctype.h>
 
 #define BUFFER_SIZE 512
+#define DEFAULT_PATH "(standart input)"
 
 //Global variables hold options state
 int optionI = 0;
@@ -21,12 +22,12 @@ int optionR = 0;
 //Global variable with pattern
 char givenPattern[BUFFER_SIZE];
 //Global variable with file/dir
-char givenPath[BUFFER_SIZE] = {};
+char givenPath[BUFFER_SIZE] = DEFAULT_PATH;
 
 //Checks if a given path is valid
 int validPath(const char *path);
-//Returns if a given path is a directory
-int isDirectory(const char *path);
+//Returns if a given path is a regular file
+int isFile(const char *path);
 //Reads given parameters
 int readParameters(int argc, char* argv[]);
 //Processes a given file looking for a given pattern
@@ -44,13 +45,23 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  if(strlen(givenPath) > 0 && !validPath(givenPath)) {
+  if(strcmp(givenPath, DEFAULT_PATH) != 0 && !validPath(givenPath)) {
     return 2;
   }
 
-  processFile(givenPath, givenPattern);
-  //printf("::%s\n::%s\n", givenPattern, givenPath);
-
+  if((strcmp(givenPath, DEFAULT_PATH) == 0) || isFile(givenPath)) {
+    processFile(givenPath, givenPattern);
+  }
+  else {
+    if(!optionW) {
+      printf("%s: Is a directory\n", givenPath);
+    }
+    else {
+      /*
+      TODO: -w option
+      */
+    }
+  }
 
   return 0;
 }
@@ -64,22 +75,28 @@ int validPath(const char *path) {
   return 1;
 }
 
-int isDirectory(const char *path) {
-   struct stat stat_buf;
-   if (stat(path, &stat_buf) != 0) {
-     perror(path);
-     return -1;
-   }
-   return S_ISDIR(stat_buf.st_mode);
+int isFile(const char *path) {
+
+  struct stat stat_buf;
+  if (stat(path, &stat_buf) != 0) {
+    perror(path);
+    return 0;
+  }
+  return S_ISREG(stat_buf.st_mode);
 }
 
 void processFile(const char* path, const char* pattern) {
 
-    FILE* f = fopen(path, "r"); //opens file
-
-    if(f == NULL) {
-      perror(path);
-      return;
+    FILE* f;
+    if(strcmp(path, DEFAULT_PATH) == 0) {
+      f = stdin;
+    }
+    else {
+     f = fopen(path, "r"); //opens file
+     if(f == NULL) {
+       perror(path);
+       return;
+     }
     }
 
     char line[BUFFER_SIZE];
@@ -208,7 +225,7 @@ int readParameters(int argc, char* argv[]) {
     }
     else {
       if(flag) {
-        if(strlen(givenPath) != 0) {
+        if(strcmp(givenPath, DEFAULT_PATH) != 0) {
           return 1;
         }
         strcpy(givenPath, argv[i]);
