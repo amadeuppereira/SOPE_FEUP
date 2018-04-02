@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <ctype.h>
+#include <dirent.h>
 
 #define BUFFER_SIZE 512
 #define DEFAULT_PATH "(standart input)"
@@ -40,6 +41,7 @@ int strContains(const char* str1, const char* str2);
 
 int main(int argc, char* argv[]) {
   int p;
+
   if (argc < 2 || (p = readParameters(argc, argv)) != 0) {
     printf("Usage: %s [options] pattern [file/dir]\n", argv[0]);
     return 1;
@@ -53,16 +55,71 @@ int main(int argc, char* argv[]) {
     processFile(givenPath, givenPattern);
   }
   else {
-    if(!optionW) {
+    if(!optionR) {
       printf("%s: Is a directory\n", givenPath);
     }
     else {
-      /*
-      TODO: -r option
-      */
+      DIR *d;
+      struct dirent *dir;
+      d = opendir(givenPath);
+      if (d) {
+        while ((dir = readdir(d)) != NULL) {
+
+          if (dir->d_type == DT_REG) {
+            char newPath[BUFFER_SIZE];
+            sprintf(newPath, "%s%s", givenPath, dir->d_name);
+            processFile(newPath, givenPattern);
+          }
+          else if(dir->d_type == DT_DIR && strcmp(dir->d_name,".")!=0 && strcmp(dir->d_name,"..")) {
+            char newPath[BUFFER_SIZE];
+            sprintf(newPath, "%s%s%s", givenPath, dir->d_name, "/");
+            pid_t pid = fork();
+            if(pid < 0) {
+              perror("Fork");
+            }
+            else if(pid == 0) {
+
+              char* param[10];
+
+              param[0] = "simgrep";
+              int i = 1;
+              if(optionI) {
+                param[i] = "-i";
+                i++;
+              }
+              if(optionL) {
+                param[i] = "-l";
+                i++;
+              }
+              if(optionN) {
+                param[i] = "-n";
+                i++;
+              }
+              if(optionC) {
+                param[i] = "-c";
+                i++;
+              }
+              if(optionW) {
+                param[i] = "-w";
+                i++;
+              }
+              if(optionR) {
+                param[i] = "-r";
+                i++;
+              }
+
+              param[i++] = givenPattern;
+              param[i++] = newPath;
+              param[i] = NULL;
+              //execl("simgrep", "simgrep", param, givenPattern, newPath, NULL);
+              execv("simgrep", param);
+            }
+          }
+        }
+      }
+      closedir(d);
     }
   }
-
   return 0;
 }
 
