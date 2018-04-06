@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include <stdio.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <termios.h>
@@ -9,6 +10,7 @@
 #include <sys/stat.h>
 #include <ctype.h>
 #include <dirent.h>
+#include <signal.h>
 
 #define BUFFER_SIZE 512
 #define DEFAULT_PATH "(standart input)"
@@ -33,15 +35,27 @@ int isFile(const char *path);
 int readParameters(int argc, char* argv[]);
 //Processes a given file looking for a given pattern
 void processFile(const char *path, const char* pattern);
-/*
-Checks if a given string(str1) constains another string(str2)
-taking in consideration the given options
-*/
+//Processes a given directory
+void processDirectory(const char* path);
+//Checks if a given string(str1) constains another string(str2)
+//taking in consideration the given options
 int strContains(const char* str1, const char* str2);
 
-int main(int argc, char* argv[]) {
-  int p;
+void sigint_handler(int signo) {
+  while(1) {
+    printf("\nAre you sure you want to terminate the program? (Y/N)\n");
+    char op;
+    scanf(" %c", &op);
+    while(getchar() != '\n');
+    if(op == 'Y' || op == 'y') exit(0);
+    else if (op == 'N' || op == 'n') return;
+  }
+}
 
+int main(int argc, char* argv[]) {
+  setbuf(stdout, NULL);
+
+  int p;
   if (argc < 2 || (p = readParameters(argc, argv)) != 0) {
     printf("Usage: %s [options] pattern [file/dir]\n", argv[0]);
     return 1;
@@ -51,6 +65,14 @@ int main(int argc, char* argv[]) {
     return 2;
   }
 
+  struct sigaction action;
+  action.sa_handler = sigint_handler;
+  sigemptyset(&action.sa_mask);
+  action.sa_flags = 0;
+
+  sigaction(SIGINT, &action, NULL);
+
+
   if((strcmp(givenPath, DEFAULT_PATH) == 0) || isFile(givenPath)) {
     processFile(givenPath, givenPattern);
   }
@@ -59,65 +81,7 @@ int main(int argc, char* argv[]) {
       printf("%s: Is a directory\n", givenPath);
     }
     else {
-      DIR *d;
-      struct dirent *dir;
-      d = opendir(givenPath);
-      if (d) {
-        while ((dir = readdir(d)) != NULL) {
-
-          if (dir->d_type == DT_REG) {
-            char newPath[BUFFER_SIZE];
-            sprintf(newPath, "%s%s", givenPath, dir->d_name);
-            processFile(newPath, givenPattern);
-          }
-          else if(dir->d_type == DT_DIR && strcmp(dir->d_name,".")!=0 && strcmp(dir->d_name,"..")) {
-            char newPath[BUFFER_SIZE];
-            sprintf(newPath, "%s%s%s", givenPath, dir->d_name, "/");
-            pid_t pid = fork();
-            if(pid < 0) {
-              perror("Fork");
-            }
-            else if(pid == 0) {
-
-              char* param[10];
-
-              param[0] = "simgrep";
-              int i = 1;
-              if(optionI) {
-                param[i] = "-i";
-                i++;
-              }
-              if(optionL) {
-                param[i] = "-l";
-                i++;
-              }
-              if(optionN) {
-                param[i] = "-n";
-                i++;
-              }
-              if(optionC) {
-                param[i] = "-c";
-                i++;
-              }
-              if(optionW) {
-                param[i] = "-w";
-                i++;
-              }
-              if(optionR) {
-                param[i] = "-r";
-                i++;
-              }
-
-              param[i++] = givenPattern;
-              param[i++] = newPath;
-              param[i] = NULL;
-              //execl("simgrep", "simgrep", param, givenPattern, newPath, NULL);
-              execv("simgrep", param);
-            }
-          }
-        }
-      }
-      closedir(d);
+      processDirectory(givenPath);
     }
   }
   return 0;
@@ -142,6 +106,65 @@ int isFile(const char *path) {
   return S_ISREG(stat_buf.st_mode);
 }
 
+void processDirectory(const char* path) {
+  DIR *d;
+  struct dirent *dir;
+  d = opendir(givenPath);
+  if (d) {
+    while ((dir = readdir(d)) != NULL) {
+
+      if (dir->d_type == DT_REG) {
+        char newPath[BUFFER_SIZE];
+        sprintf(newPath, "%s%s%s", givenPath, "/", dir->d_name);
+        processFile(newPath, givenPattern);
+      }
+      else if(dir->d_type == DT_DIR && strcmp(dir->d_name,".")!=0 && strcmp(dir->d_name,"..")) {
+        char newPath[BUFFER_SIZE];
+        sprintf(newPath, "%s%s%s", givenPath, "/", dir->d_name);
+        pid_t pid = fork();
+        if(pid < 0) {
+          perror("Fork");
+        }
+        else if(pid == 0) {
+          char* param[10];
+          param[0] = "simgrep";
+          int i = 1;
+          if(optionI) {
+            param[i] = "-i";
+            i++;
+          }
+          if(optionL) {
+            param[i] = "-l";
+            i++;
+          }
+          if(optionN) {
+            param[i] = "-n";
+            i++;
+          }
+          if(optionC) {
+            param[i] = "-c";
+            i++;
+          }
+          if(optionW) {
+            param[i] = "-w";
+            i++;
+          }
+          if(optionR) {
+            param[i] = "-r";
+            i++;
+          }
+
+          param[i++] = givenPattern;
+          param[i++] = newPath;
+          param[i] = NULL;;
+          execv("simgrep", param);
+        }
+      }
+    }
+  }
+  closedir(d);
+}
+
 void processFile(const char* path, const char* pattern) {
 
     FILE* f;
@@ -159,7 +182,13 @@ void processFile(const char* path, const char* pattern) {
     char line[BUFFER_SIZE];
     int lineNumber = 1;
     int totalLines = 0;
-    while(fgets(line, BUFFER_SIZE, f) != NULL) {
+    while(1) {
+      if(fgets(line, BUFFER_SIZE, f) == NULL) {
+        if(errno == EINTR) {
+          continue;
+        }
+        break;
+      }
       if(strContains(line, pattern)) {
         if(optionL) {
           printf("%s\n", path);
@@ -285,7 +314,9 @@ int readParameters(int argc, char* argv[]) {
         if(strcmp(givenPath, DEFAULT_PATH) != 0) {
           return 1;
         }
-        strcpy(givenPath, argv[i]);
+        char buf[BUFFER_SIZE + 1];
+        realpath(argv[i], buf);
+        strcpy(givenPath, buf);
       }
       else {
         flag = 1;
@@ -293,7 +324,7 @@ int readParameters(int argc, char* argv[]) {
       }
     }
   }
-  //no not option string given
+  //no option string given
   if(!flag) {
     return 1;
   }
