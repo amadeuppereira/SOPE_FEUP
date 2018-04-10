@@ -27,6 +27,8 @@ char givenPattern[BUFFER_SIZE];
 //Global variable with file/dir
 char givenPath[BUFFER_SIZE] = DEFAULT_PATH;
 
+int parentPid;
+
 //Checks if a given path is valid
 int validPath(const char *path);
 //Returns if a given path is a regular file
@@ -41,14 +43,33 @@ void processDirectory(const char* path);
 //taking in consideration the given options
 int strContains(const char* str1, const char* str2);
 
-void sigint_handler(int signo) {
-  while(1) {
-    printf("\nAre you sure you want to terminate the program? (Y/N)\n");
-    char op;
-    scanf(" %c", &op);
-    while(getchar() != '\n');
-    if(op == 'Y' || op == 'y') exit(0);
-    else if (op == 'N' || op == 'n') return;
+void sig_handler(int signo) {
+
+  switch(signo) {
+    case SIGUSR1:
+      exit(0);
+    case SIGINT:
+      while(parentPid == getpid()) {
+        printf("\nAre you sure you want to terminate the program? (Y/N)\n");
+        char op;
+        scanf(" %c", &op);
+        while(getchar() != '\n');
+        if(op == 'Y' || op == 'y') kill(-parentPid, SIGUSR1);
+        else if (op == 'N' || op == 'n') {
+          kill(-parentPid, SIGUSR2);
+          return;
+        }
+      }
+      if(parentPid != getpid()) {
+        sigset_t mask;
+        sigemptyset(&mask);
+        sigsuspend(&mask);
+      }
+      break;
+    case SIGUSR2:
+      break;
+    default:
+      break;
   }
 }
 
@@ -65,12 +86,16 @@ int main(int argc, char* argv[]) {
     return 2;
   }
 
+  parentPid = getpid();
+
   struct sigaction action;
-  action.sa_handler = sigint_handler;
+  action.sa_handler = sig_handler;
   sigemptyset(&action.sa_mask);
   action.sa_flags = 0;
-
   sigaction(SIGINT, &action, NULL);
+  sigaction(SIGUSR1, &action, NULL);
+  sigaction(SIGUSR2, &action, NULL);
+
 
 
   if((strcmp(givenPath, DEFAULT_PATH) == 0) || isFile(givenPath)) {
@@ -122,6 +147,7 @@ void processDirectory(const char* path) {
         char newPath[BUFFER_SIZE];
         sprintf(newPath, "%s%s%s", givenPath, "/", dir->d_name);
         pid_t pid = fork();
+
         if(pid < 0) {
           perror("Fork");
         }
