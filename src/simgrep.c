@@ -11,6 +11,7 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <signal.h>
+#include <time.h>
 
 #define BUFFER_SIZE 512
 #define DEFAULT_PATH "(standart input)"
@@ -26,8 +27,15 @@ int optionR = 0;
 char givenPattern[BUFFER_SIZE];
 //Global variable with file/dir
 char givenPath[BUFFER_SIZE] = DEFAULT_PATH;
-
+//Global variable with the parent pid
 int parentPid;
+//Global variable with the time when the program has started
+time_t startTime;
+//Global variable with the logfile
+char* logfileName;
+FILE *logfile;
+
+//------------------------------------------
 
 //Checks if a given path is valid
 int validPath(const char *path);
@@ -42,13 +50,21 @@ void processDirectory(const char* path);
 //Checks if a given string(str1) constains another string(str2)
 //taking in consideration the given options
 int strContains(const char* str1, const char* str2);
+//Get logfile path
+int getLogfile();
+//Write in the logfile
+void logPrint(const char* act);
+
+//---------------------------------------------
 
 void sig_handler(int signo) {
 
   switch(signo) {
     case SIGUSR1:
+      logPrint("SIGUSR1");
       exit(0);
     case SIGINT:
+      logPrint("SIGINT");
       while(parentPid == getpid()) {
         printf("\nAre you sure you want to terminate the program? (Y/N)\n");
         char op;
@@ -67,22 +83,41 @@ void sig_handler(int signo) {
       }
       break;
     case SIGUSR2:
+      logPrint("SIGUSR2");
       break;
     default:
       break;
   }
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[], char* envp[]) {
+  startTime = time(0);
   setbuf(stdout, NULL);
+
+  if(getLogfile() != 0) {
+    return 3;
+  }
+
+  char msg[128] = "COMANDO ";
+	int i;
+	for (i = 0; i < argc; ++i) // Generate command to output to log file
+	{
+		strcat(msg, argv[i]);
+		if (i != argc-1)
+			strcat(msg, " ");
+	}
+	logPrint(msg);
 
   int p;
   if (argc < 2 || (p = readParameters(argc, argv)) != 0) {
     printf("Usage: %s [options] pattern [file/dir]\n", argv[0]);
+    fclose(logfile);
     return 1;
   }
 
+
   if(strcmp(givenPath, DEFAULT_PATH) != 0 && !validPath(givenPath)) {
+    fclose(logfile);
     return 2;
   }
 
@@ -109,6 +144,8 @@ int main(int argc, char* argv[]) {
       processDirectory(givenPath);
     }
   }
+
+  fclose(logfile);
   return 0;
 }
 
@@ -134,6 +171,10 @@ int isFile(const char *path) {
 void processDirectory(const char* path) {
   DIR *d;
   struct dirent *dir;
+
+  char msg[128];
+  sprintf(msg, "ABERTO %s", path);
+  logPrint(msg);
   d = opendir(givenPath);
   if (d) {
     while ((dir = readdir(d)) != NULL) {
@@ -188,21 +229,28 @@ void processDirectory(const char* path) {
       }
     }
   }
+  sprintf(msg, "FECHADO %s", path);
+  logPrint(msg);
   closedir(d);
 }
 
 void processFile(const char* path, const char* pattern) {
+    int flag = 1;
 
     FILE* f;
     if(strcmp(path, DEFAULT_PATH) == 0) {
+      flag = 0;
       f = stdin;
     }
     else {
-     f = fopen(path, "r"); //opens file
-     if(f == NULL) {
-       perror(path);
-       return;
-     }
+      char msg[128];
+      sprintf(msg, "ABERTO %s", path);
+      logPrint(msg);
+      f = fopen(path, "r"); //opens file
+      if(f == NULL) {
+        perror(path);
+        return;
+      }
     }
 
     char line[BUFFER_SIZE];
@@ -236,7 +284,11 @@ void processFile(const char* path, const char* pattern) {
       printf("%d\n", totalLines);
     }
 
-
+    if(flag) {
+      char msg[128];
+      sprintf(msg, "FECHADO %s", path);
+      logPrint(msg);
+    }
     fclose(f);
 }
 
@@ -355,4 +407,25 @@ int readParameters(int argc, char* argv[]) {
     return 1;
   }
   return 0;
+}
+
+int getLogfile() {
+  if((logfileName = getenv("LOGFILENAME")) == NULL) {
+    printf("LOGFILENAME not found!\n");
+    return 1;
+  }
+
+
+  char buf[BUFFER_SIZE + 1];
+  realpath(logfileName, buf);
+  logfile = fopen(buf, "a");
+  if(logfile == NULL) {
+    perror(buf);
+    return 1;
+  }
+  return 0;
+}
+
+void logPrint(const char* act) {
+  fprintf(logfile, "%.2f - %d - %s\n", difftime(time(0), startTime)*1000, getpid(), act);
 }
