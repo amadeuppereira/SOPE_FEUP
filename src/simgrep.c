@@ -91,7 +91,7 @@ void sig_handler(int signo) {
 }
 
 int main(int argc, char* argv[], char* envp[]) {
-  startTime = time(0);
+  time(&startTime);
   setbuf(stdout, NULL);
 
   if(getLogfile() != 0) {
@@ -132,7 +132,6 @@ int main(int argc, char* argv[], char* envp[]) {
   sigaction(SIGUSR2, &action, NULL);
 
 
-
   if((strcmp(givenPath, DEFAULT_PATH) == 0) || isFile(givenPath)) {
     processFile(givenPath, givenPattern);
   }
@@ -169,68 +168,31 @@ int isFile(const char *path) {
 }
 
 void processDirectory(const char* path) {
+
   DIR *d;
   struct dirent *dir;
 
-  char msg[128];
-  sprintf(msg, "ABERTO %s", path);
-  logPrint(msg);
-  d = opendir(givenPath);
+  d = opendir(path);
   if (d) {
-    while ((dir = readdir(d)) != NULL) {
-
+    while ((dir = readdir(d))) {
+      char newPath[BUFFER_SIZE];
+      sprintf(newPath, "%s%s%s", path, "/", dir->d_name);
       if (dir->d_type == DT_REG) {
-        char newPath[BUFFER_SIZE];
-        sprintf(newPath, "%s%s%s", givenPath, "/", dir->d_name);
         processFile(newPath, givenPattern);
       }
-      else if(dir->d_type == DT_DIR && strcmp(dir->d_name,".")!=0 && strcmp(dir->d_name,"..")) {
-        char newPath[BUFFER_SIZE];
-        sprintf(newPath, "%s%s%s", givenPath, "/", dir->d_name);
+      else if(dir->d_type == DT_DIR && strcmp(dir->d_name,".")!=0 && strcmp(dir->d_name,"..")!=0) {
         pid_t pid = fork();
-
         if(pid < 0) {
           perror("Fork");
         }
         else if(pid == 0) {
-          char* param[10];
-          param[0] = "simgrep";
-          int i = 1;
-          if(optionI) {
-            param[i] = "-i";
-            i++;
-          }
-          if(optionL) {
-            param[i] = "-l";
-            i++;
-          }
-          if(optionN) {
-            param[i] = "-n";
-            i++;
-          }
-          if(optionC) {
-            param[i] = "-c";
-            i++;
-          }
-          if(optionW) {
-            param[i] = "-w";
-            i++;
-          }
-          if(optionR) {
-            param[i] = "-r";
-            i++;
-          }
-
-          param[i++] = givenPattern;
-          param[i++] = newPath;
-          param[i] = NULL;;
-          execv("simgrep", param);
+          processDirectory(newPath);
+          exit(0);
         }
       }
     }
   }
-  sprintf(msg, "FECHADO %s", path);
-  logPrint(msg);
+
   closedir(d);
 }
 
@@ -259,6 +221,7 @@ void processFile(const char* path, const char* pattern) {
     while(1) {
       if(fgets(line, BUFFER_SIZE, f) == NULL) {
         if(errno == EINTR) {
+          errno = 0;
           continue;
         }
         break;
@@ -281,7 +244,7 @@ void processFile(const char* path, const char* pattern) {
     }
 
     if(optionC) {
-      printf("%d\n", totalLines);
+      printf("%s: %d\n", path, totalLines);
     }
 
     if(flag) {

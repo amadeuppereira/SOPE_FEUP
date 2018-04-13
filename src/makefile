@@ -1,2 +1,2 @@
 simgrep: simgrep.c
-	cc -g -o simgrep simgrep.c
+	gcc simgrep.c -o simgrep -Wall
