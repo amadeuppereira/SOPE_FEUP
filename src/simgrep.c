@@ -12,6 +12,7 @@
 #include <dirent.h>
 #include <signal.h>
 #include <time.h>
+#include <sys/time.h>
 
 #define BUFFER_SIZE 512
 #define DEFAULT_PATH "(standart input)"
@@ -30,7 +31,7 @@ char givenPath[BUFFER_SIZE] = DEFAULT_PATH;
 //Global variable with the parent pid
 int parentPid;
 //Global variable with the time when the program has started
-time_t startTime;
+struct timeval startTime;
 //Global variable with the logfile
 char* logfileName;
 FILE *logfile;
@@ -91,7 +92,7 @@ void sig_handler(int signo) {
 }
 
 int main(int argc, char* argv[], char* envp[]) {
-  time(&startTime);
+  gettimeofday(&startTime, NULL);
   setbuf(stdout, NULL);
 
   if(getLogfile() != 0) {
@@ -390,5 +391,8 @@ int getLogfile() {
 }
 
 void logPrint(const char* act) {
-  fprintf(logfile, "%.2f - %d - %s\n", difftime(time(0), startTime)*1000, getpid(), act);
+  struct timeval now;
+  gettimeofday(&now, NULL);
+  double diff = (double)(now.tv_usec - startTime.tv_usec);
+  fprintf(logfile, "%.2f - %d - %s\n",diff, getpid(), act);
 }
