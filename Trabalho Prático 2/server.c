@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "constantes.h"
 
 int main(int argc, char* argv[]){
   if (argc < 2) {
@@ -15,7 +16,6 @@ int main(int argc, char* argv[]){
   int num_room_seats = atoi(argv[1]);
   int num_ticket_offcies = atoi(argv[2]);
   int open_time = atoi(argv[3]);
-
 
 
 

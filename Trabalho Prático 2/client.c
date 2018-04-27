@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "constantes.h"
 
 int main(int argc, char* argv[]){
   if (argc < 2) {
@@ -35,7 +36,6 @@ int main(int argc, char* argv[]){
     pref_seat_list[i] = atoi(newString[i]);
   }
 //////////////////////////////////////////////////////////
-
 
 
 
