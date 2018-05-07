@@ -1,7 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "constantes.h"
+#include "constants.h"
 
 int main(int argc, char* argv[]){
   if (argc < 2) {
@@ -37,10 +34,22 @@ int main(int argc, char* argv[]){
   }
 //////////////////////////////////////////////////////////
 
+int fd, messagelen;
+char message[100];
 
-//ver DELAY()
+fd=open("requests", O_WRONLY);
+if(fd == -1){
+  printf("Ticket offices closed!");
+  exit(1);
+}
 
-
+for(i=1; i <=3; i++){
+  sprintf(message, "Hello no. %d from process no. %d\n", i, getpid());
+  messagelen = strlen(message) +1;
+  write(fd, message, messagelen);
+  sleep(3);
+}
+close(fd);
 
   return 0;
 }
