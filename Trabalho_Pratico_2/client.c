@@ -34,22 +34,47 @@ int main(int argc, char* argv[]){
   }
 //////////////////////////////////////////////////////////
 
-int fd, messagelen;
-char message[100];
+  //Making FIFO to get the answer from the server
+  int fd_answer;
+  char fifo_name[10];
 
-fd=open("requests", O_WRONLY);
-if(fd == -1){
-  printf("Ticket offices closed!");
-  exit(1);
-}
+  char *end = fifo_name;
+  end += sprintf(end, "ans%ld", (long)getpid());
+  
+  if(mkfifo(fifo_name,0660) < 0){
+    if (errno == EEXIST)
+      printf("FIFO '%s' already exists\n", fifo_name);
+    else
+      printf("Can't create FIFO\n");
+  }
 
-for(i=1; i <=3; i++){
-  sprintf(message, "Hello no. %d from process no. %d\n", i, getpid());
+
+  //Writing to FIFO requests
+  int fd_requests, messagelen;
+  char message[100];
+
+  fd_requests=open("requests", O_WRONLY);
+  if(fd_requests == -1){
+   printf("Ticket offices closed!\n");
+   exit(1);
+  }
+
+  sprintf(message, "I am process no. %d, i want %d seats\n", getpid(), num_wanted_seats);
+  //falta enviar os pref_seat_list
   messagelen = strlen(message) +1;
-  write(fd, message, messagelen);
-  sleep(3);
-}
-close(fd);
+  write(fd_requests, message, messagelen);
+  close(fd_requests);
+
+
+  //Reading FIFO Answers
+  if((fd_answer=open(fifo_name, O_RDONLY)) == -1)
+    printf("FIFO 'ans' failed to open in READONLY mode\n");
+
+  close(fd_answer);
+
+    //Destroying FIFO
+  if (unlink(fifo_name) < 0)
+    printf("Error when destroying FIFO '%s'\n", fifo_name);
 
   return 0;
 }
