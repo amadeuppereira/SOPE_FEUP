@@ -1,11 +1,14 @@
 #include "constants.h"
 
 #define FIFO_SERVER "requests" 
+#define SERVER_LOG "slog.txt"
+#define SERVER_BOOKINGS "sbook.txt"
 
 int num_room_seats;
 int timeout = 0;
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cvar = PTHREAD_COND_INITIALIZER;
+FILE *slog;
 
 struct Seat{
   int seatNumber;
@@ -25,7 +28,6 @@ struct Request {
 struct Seat roomSeats[MAX_ROOM_SEATS];
 struct Request buffer[1];
 
-void exitFn();
 int readParameters(int *num_room_seats, int *num_ticket_offices, int *open_time, char *argv[]);
 void createSeats(int num_room_seats);
 int createFIFO(char* name);
@@ -37,4 +39,10 @@ int isSeatFree(struct Seat *seats, int seatNum);
 void bookSeat(struct Seat * seats, int seatNum, int clientID);
 void freeSeat(struct Seat *seats, int seatNum);
 int isRoomFull();
+
+void slogOpenClose(int no, int open);
+void slogRequest(int no, struct Request r, int ret, int reserved_seats[]);
+void getFullSeatNumber(char *fn, int n);
+void getFullClientId(char *fn, int id);
 void answerFifoName(char *name, int clientID);
+void sbookReservations();
