@@ -36,6 +36,10 @@ int main(int argc, char* argv[]){
      }
     return 3;
   }
+  
+  struct Request request;
+  request.processed = 1;
+  buffer[0] = request;
 
   //Starting Time Count
   alarm(open_time);
@@ -52,10 +56,6 @@ int main(int argc, char* argv[]){
   }
   
   //Reading FIFO
-  struct Request request;
-  request.processed = 1;
-  buffer[0] = request;
- 
   while(!timeout) {
     if(buffer[0].processed) {
       if(read(requests, &request, sizeof(struct Request)) < 0) {
@@ -64,13 +64,11 @@ int main(int argc, char* argv[]){
       buffer[0] = request;
     }
   }
-
+  
   close(requests);
 
   for(i = 0; i < num_ticket_offices; i++) {
     pthread_join(tid[i], NULL);
-    //TODO avisar os threads para acabarem <---------------------------------------------------------------
-    pthread_cancel(tid[i]);
   }
   
   //Destroying FIFO
@@ -127,39 +125,38 @@ int destroyFIFO(char* name) {
 void alarm_handler(int signo) {
   timeout = 1;
   printf("timeout\n");
-  exit(0);
 }
 
 void *ticketOffice(void *arg) {
   struct Request r;
-  while(1) {
-    pthread_mutex_lock(&mut);
-    if(!buffer[0].processed) {
+  while(!timeout) {
+    int status = pthread_mutex_trylock(&mut);
+    if (!buffer[0].processed && status != EBUSY) {
       r = buffer[0];
       buffer[0].processed = 1;
-    }
 
-    int reserved_seats[r.num_wanted_seats];
-    int ret = checkRequest(r, reserved_seats);
-    pthread_mutex_unlock(&mut);
+      int reserved_seats[r.num_wanted_seats];
+      int ret = checkRequest(r, reserved_seats);
+      pthread_mutex_unlock(&mut);
 
-    char fifo_name[MAX_STR_LEN];
-    answerFifoName(fifo_name, r.clientID);
-    
-    int fd = open(fifo_name, O_WRONLY);
-    if(fd < 0) {
-      printf("FIFO '%s' failed to open in WRITEONLY mode\n", fifo_name);
-      exit(1);
-    }
+      char fifo_name[MAX_STR_LEN];
+      answerFifoName(fifo_name, r.clientID);
 
-    if(ret < 0) {
-      write(fd, &ret, sizeof(int));
-    }
-    else {
-      write(fd, &r.num_wanted_seats, sizeof(int));
-      int i;
-      for(i = 0; i < r.num_wanted_seats; i++) {
-        write(fd, &reserved_seats[i], sizeof(int));
+      int fd = open(fifo_name, O_WRONLY);
+      if (fd < 0) {
+        printf("FIFO '%s' failed to open in WRITEONLY mode\n", fifo_name);
+        exit(1);
+      }
+
+      if (ret < 0) {
+        write(fd, &ret, sizeof(int));
+      }
+      else {
+        write(fd, &r.num_wanted_seats, sizeof(int));
+        int i;
+        for (i = 0; i < r.num_wanted_seats; i++) {
+          write(fd, &reserved_seats[i], sizeof(int));
+        }
       }
     }
   }
@@ -230,7 +227,6 @@ int checkRequest(struct Request r, int reserved_seats[]) {
   return 0;
 }
 
-//return 1 if the seat is free, 0 if the seat is occupied
 int isSeatFree(struct Seat *seats, int seatNum){
   int i;
   for(i = 0; i < num_room_seats; i++){
