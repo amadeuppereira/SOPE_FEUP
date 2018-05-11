@@ -1,4 +1,4 @@
-#include "constants.h"
+#include "client.h"
 
 int main(int argc, char* argv[]){
   if (argc < 2) {
@@ -10,29 +10,16 @@ int main(int argc, char* argv[]){
     return 1;
   }
 
-  int time_out = atoi(argv[1]);
-  int num_wanted_seats = atoi(argv[2]);
+  //Reading the parameters
+  int time_out;
+  int num_wanted_seats;
+  int* pref_seat_list = malloc(MAX_PREFERED_SEATS*sizeof(int));
 
-//////////////////////////////////////////////////////////
-// Code to get pref_seat_list
-  char newString[sizeof(argv[3])][sizeof(argv[3])];
-  int i, j=0, ctr=0;
-  for(i=0; i <= (strlen(argv[3])); i++){
-    if(argv[3][i] == ' ' || argv[3][i]=='\0'){
-      newString[ctr][j]='\0';
-      ctr++;
-      j=0;
-    }
-    else{
-      newString[ctr][j]= argv[3][i];
-      j++;
-    }
+  if(readParameters(&time_out, &num_wanted_seats, pref_seat_list, argv) != 0) {
+    printf("Invalid Arguments!\n");
+    return 1;
   }
-  int pref_seat_list[ctr];
-  for(i=0;i < ctr;i++){
-    pref_seat_list[i] = atoi(newString[i]);
-  }
-//////////////////////////////////////////////////////////
+
 
   //Making FIFO to get the answer from the server
   int fd_answer;
@@ -50,20 +37,19 @@ int main(int argc, char* argv[]){
 
 
   //Writing to FIFO requests
-  int fd_requests, messagelen;
-  char message[100];
-
-  fd_requests=open("requests", O_WRONLY);
-  if(fd_requests == -1){
+  int requests=open("requests", O_WRONLY);
+  if(requests == -1){
    printf("Ticket offices closed!\n");
    exit(1);
   }
 
-  sprintf(message, "I am process no. %d, i want %d seats\n", getpid(), num_wanted_seats);
-  //falta enviar os pref_seat_list
-  messagelen = strlen(message) +1;
-  write(fd_requests, message, messagelen);
-  close(fd_requests);
+  struct Request request;
+  request.clientID = getpid();
+  request.num_wanted_seats = num_wanted_seats;
+  //request.prefered_seats = pref_seat_list;
+
+  write(requests, &request, sizeof(struct Request));
+  close(requests);
 
 
   //Reading FIFO Answers
@@ -76,5 +62,32 @@ int main(int argc, char* argv[]){
   if (unlink(fifo_name) < 0)
     printf("Error when destroying FIFO '%s'\n", fifo_name);
 
+  return 0;
+}
+
+int readParameters(int *time_out, int *num_wanted_seats, int pref_seat_list[], char *argv[]) {
+  *time_out = atoi(argv[1]);
+  *num_wanted_seats = atoi(argv[2]);
+  
+  char newString[sizeof(argv[3])][sizeof(argv[3])];
+  int i, j=0, ctr=0;
+  for(i=0; i <= (strlen(argv[3])); i++){
+    if(argv[3][i] == ' ' || argv[3][i]=='\0'){
+      newString[ctr][j]='\0';
+      ctr++;
+      j=0;
+    }
+    else{
+      newString[ctr][j]= argv[3][i];
+      j++;
+    }
+  }
+  for(i=0;i < ctr;i++){
+    pref_seat_list[i] = atoi(newString[i]);
+  }
+
+  if(*time_out <= 0 || *num_wanted_seats <= 0)
+    return 1;
+  
   return 0;
 }

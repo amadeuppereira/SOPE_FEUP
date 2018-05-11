@@ -28,7 +28,6 @@ int main(int argc, char* argv[]){
     return 2;
 
   //Open FIFO
-
   int requests = open(FIFO_SERVER, O_RDONLY | O_NONBLOCK);
   if(requests < 0) {
     printf("FIFO '%s' failed to open in READONLY mode\n", FIFO_SERVER);
@@ -71,6 +70,7 @@ int main(int argc, char* argv[]){
   for(i = 0; i < num_ticket_offices; i++) {
     pthread_join(tid[i], NULL);
     //TODO avisar os threads para acabarem <---------------------------------------------------------------
+    pthread_cancel(tid[i]);
   }
   
   //Destroying FIFO
