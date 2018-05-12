@@ -12,3 +12,5 @@ struct Request {
 int readParameters(int *time_out, int *num_wanted_seats, int pref_seat_list[], char *argv[]);
 int destroyFIFO(char* name);
 void alarm_handler(int signo);
+void answerFifoName(char *name);
+void getFullClientId(char *fn, int id);

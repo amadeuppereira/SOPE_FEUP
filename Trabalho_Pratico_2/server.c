@@ -145,7 +145,6 @@ void alarm_handler(int signo) {
 }
 
 void *ticketOffice(void *arg) {
-  printf("yo");
   int t_no = (int) arg;
   struct Request r;
   while(!timeout) {
@@ -161,7 +160,6 @@ void *ticketOffice(void *arg) {
 
       char fifo_name[MAX_BUFFER_SIZE];
       answerFifoName(fifo_name, r.clientID);
-      printf("%s",fifo_name);
 
       int fd = open(fifo_name, O_WRONLY);
       if (fd < 0) {

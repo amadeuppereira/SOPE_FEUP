@@ -31,12 +31,16 @@ int main(int argc, char* argv[]){
     return 1;
   }
 
+  //Opening FIFO requests
+  int requests=open(FIFO_SERVER, O_WRONLY);
+  if(requests == -1){
+   printf("Ticket offices closed!\n");
+   exit(1);
+  }
 
-  //Making FIFO to get the answer from the server
+    //Making FIFO to get the answer from the server
   int fd_answer;
-
-  char *end = fifo_name;
-  end += sprintf(end, "ans%ld", (long)getpid());
+  answerFifoName(fifo_name);
   
   if(mkfifo(fifo_name,0660) < 0){
     if (errno == EEXIST)
@@ -49,12 +53,6 @@ int main(int argc, char* argv[]){
   alarm(time_out);
 
   //Writing to FIFO requests
-  int requests=open(FIFO_SERVER, O_WRONLY);
-  if(requests == -1){
-   printf("Ticket offices closed!\n");
-   exit(1);
-  }
-
   struct Request request;
   request.clientID = getpid();
   request.num_wanted_seats = num_wanted_seats;
@@ -126,4 +124,21 @@ void alarm_handler(int signo) {
   }
   printf("timeout\n");
   exit(1);
+}
+
+void answerFifoName(char *name) {
+  char id[WIDTH_PID + 1];
+  getFullClientId(id, getpid());
+  sprintf(name, "ans%s", id);
+}
+
+void getFullClientId(char *fn, int id) {
+  sprintf(fn, "");
+  char clientID_s[WIDTH_PID + 1];
+  sprintf(clientID_s, "%d", id);
+  int i;
+  for(i = strlen(clientID_s); i < WIDTH_PID; i++) {
+    sprintf(fn, "%s%d", fn, 0);
+  }
+  sprintf(fn, "%s%s", fn, clientID_s);
 }
