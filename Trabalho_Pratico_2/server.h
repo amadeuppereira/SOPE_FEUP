@@ -1,13 +1,11 @@
 #include "constants.h"
 
-#define FIFO_SERVER "requests" 
 #define SERVER_LOG "slog.txt"
 #define SERVER_BOOKINGS "sbook.txt"
 
 int num_room_seats;
 int timeout = 0;
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t cvar = PTHREAD_COND_INITIALIZER;
 FILE *slog;
 
 struct Seat{

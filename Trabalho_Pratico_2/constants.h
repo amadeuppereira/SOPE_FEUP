@@ -12,7 +12,7 @@
 
 #define MAX_ROOM_SEATS 9999
 #define MAX_CLI_SEATS 99
-#define DELAY() sleep(5)
+#define DELAY() sleep(1)
 #define MAX_PREFERED_SEATS 99
 #define WIDTH_SEAT 4
 #define WIDTH_PID 5

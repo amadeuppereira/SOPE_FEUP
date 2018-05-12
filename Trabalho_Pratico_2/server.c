@@ -65,10 +65,6 @@ int main(int argc, char* argv[]){
       if(read(requests, &request, sizeof(struct Request)) < 0 && errno != EAGAIN) {
         perror("READ");
       }
-      // printf("%d, %d, %d\n",request.clientID, request.num_wanted_seats, request.num_prefered_seats);
-      // for(i = 0; i < request.num_prefered_seats; i++){
-      //   printf("%d\n", request.prefered_seats[i]);
-      // }
       buffer[0] = request;
     }
   }
@@ -83,9 +79,9 @@ int main(int argc, char* argv[]){
   sbookReservations();
 
   //Destroying FIFO
-  // if(destroyFIFO(FIFO_SERVER) != 0) {
-  //   return 4;
-  // }
+  if(destroyFIFO(FIFO_SERVER) != 0) {
+    return 4;
+  }
 
   fclose(slog);
   return 0;
@@ -112,7 +108,7 @@ void createSeats(int num_room_seats) {
 }
 
 int createFIFO(char *name) {
-   if(mkfifo(name,0777) < 0){
+   if(mkfifo(name,0660) < 0){
     if (errno == EEXIST) {
       printf("FIFO '%s' already exists\n", name);
       return 1;
@@ -135,13 +131,7 @@ int destroyFIFO(char* name) {
 
 void alarm_handler(int signo) {
   timeout = 1;
-
-  //Destroying FIFO
-  if(destroyFIFO(FIFO_SERVER) != 0) {
-    exit(4);
-  }
   printf("timeout\n");
-  exit(1);
 }
 
 void *ticketOffice(void *arg) {
@@ -149,12 +139,15 @@ void *ticketOffice(void *arg) {
   struct Request r;
   while(!timeout) {
     int status = pthread_mutex_trylock(&mut);
-    if (!buffer[0].processed && status != EBUSY) {
+    if(status == EBUSY) continue;
+
+    if (!buffer[0].processed) {
       r = buffer[0];
       buffer[0].processed = 1;
 
       int reserved_seats[r.num_wanted_seats];
       int ret = checkRequest(r, reserved_seats);
+      printf("checkRequest: %d\n", ret);
       slogRequest(t_no, r, ret, reserved_seats);
       pthread_mutex_unlock(&mut);
 
@@ -177,6 +170,9 @@ void *ticketOffice(void *arg) {
           write(fd, &reserved_seats[i], sizeof(int));
         }
       }
+    }
+    else {
+      pthread_mutex_unlock(&mut);
     }
   }
   return NULL;
@@ -371,9 +367,9 @@ void sbookReservations() {
 
   int i;
   for(i = 1; i <= num_room_seats; i++) {
-    if(!isSeatFree(roomSeats, i)) {
+    if(!roomSeats[i].occupied) {
       char seat[WIDTH_SEAT + 1];
-      getFullSeatNumber(seat, i);
+      getFullSeatNumber(seat, i+1);
       fprintf(sbook, "%s\n", seat);
     }
   }
