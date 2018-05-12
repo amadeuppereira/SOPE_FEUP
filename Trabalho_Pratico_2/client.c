@@ -1,5 +1,8 @@
 #include "client.h"
 
+int timeout = 0;
+char fifo_name[10];
+
 int main(int argc, char* argv[]){
   if (argc < 2) {
     printf("Usage: %s <time_out> <num_wanted_seats> <pref_seat_list>\n", argv[0]);
@@ -9,6 +12,13 @@ int main(int argc, char* argv[]){
     printf("Missing arguments!\n");
     return 1;
   }
+
+   //Alarm handler
+  struct sigaction action;
+  action.sa_handler = alarm_handler;
+  sigemptyset(&action.sa_mask);
+  action.sa_flags = 0;
+  sigaction(SIGALRM, &action, NULL);
 
   //Reading the parameters
   int time_out;
@@ -23,7 +33,6 @@ int main(int argc, char* argv[]){
 
   //Making FIFO to get the answer from the server
   int fd_answer;
-  char fifo_name[10];
 
   char *end = fifo_name;
   end += sprintf(end, "ans%ld", (long)getpid());
@@ -35,6 +44,8 @@ int main(int argc, char* argv[]){
       printf("Can't create FIFO\n");
   }
 
+  //Starting Time Count
+  alarm(time_out);
 
   //Writing to FIFO requests
   int requests=open("requests", O_WRONLY);
@@ -59,8 +70,8 @@ int main(int argc, char* argv[]){
   close(fd_answer);
 
     //Destroying FIFO
-  if (unlink(fifo_name) < 0)
-    printf("Error when destroying FIFO '%s'\n", fifo_name);
+  // if (unlink(fifo_name) < 0)
+  //   printf("Error when destroying FIFO '%s'\n", fifo_name);
 
   return 0;
 }
@@ -90,4 +101,23 @@ int readParameters(int *time_out, int *num_wanted_seats, int pref_seat_list[], c
     return 1;
   
   return 0;
+}
+
+int destroyFIFO(char* name) {
+    if (unlink(name) < 0) {
+      printf("Error when destroying FIFO '%s'\n", name);
+      return 1;
+    }
+    return 0;
+}
+
+void alarm_handler(int signo) {
+  timeout = 1;
+
+  //Destroying FIFO
+  if(destroyFIFO(fifo_name) != 0) {
+    exit(4);
+  }
+  printf("timeout\n");
+  exit(1);
 }

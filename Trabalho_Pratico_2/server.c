@@ -79,9 +79,9 @@ int main(int argc, char* argv[]){
   sbookReservations();
 
   //Destroying FIFO
-  if(destroyFIFO(FIFO_SERVER) != 0) {
-    return 4;
-  }
+  // if(destroyFIFO(FIFO_SERVER) != 0) {
+  //   return 4;
+  // }
 
   fclose(slog);
   return 0;
@@ -131,7 +131,13 @@ int destroyFIFO(char* name) {
 
 void alarm_handler(int signo) {
   timeout = 1;
+
+  //Destroying FIFO
+  if(destroyFIFO(FIFO_SERVER) != 0) {
+    exit(4);
+  }
   printf("timeout\n");
+  exit(1);
 }
 
 void *ticketOffice(void *arg) {
