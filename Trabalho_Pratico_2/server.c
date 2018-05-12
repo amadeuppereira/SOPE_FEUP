@@ -140,14 +140,13 @@ void *ticketOffice(void *arg) {
   while(!timeout) {
     int status = pthread_mutex_trylock(&mut);
     if(status == EBUSY) continue;
-
+    while(buffer[0].processed && !timeout) {}
     if (!buffer[0].processed) {
       r = buffer[0];
       buffer[0].processed = 1;
 
       int reserved_seats[r.num_wanted_seats];
       int ret = checkRequest(r, reserved_seats);
-      printf("checkRequest: %d\n", ret);
       slogRequest(t_no, r, ret, reserved_seats);
       pthread_mutex_unlock(&mut);
 

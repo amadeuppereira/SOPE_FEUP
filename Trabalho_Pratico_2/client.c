@@ -64,13 +64,19 @@ int main(int argc, char* argv[]){
 
   close(requests);
 
-  int ret;
-  while(read(fd_answer, &ret, sizeof(int)) < 0) {
-    printf("Error readind from fifo\n");
-  }
+  int ret, n, reserved_seats[num_wanted_seats];
+  while((n = read(fd_answer, &ret, sizeof(int))) <= 0);
 
   printf("ret: %d\n", ret);
-
+  if(ret >= 0) {
+    for(i = 0; i < num_wanted_seats; i++) {
+      while((n = read(fd_answer, &ret, sizeof(int))) <= 0);
+      reserved_seats[i] = ret;
+    }
+    for(i = 0; i < num_wanted_seats; i++) {
+      printf("%d\n", reserved_seats[i]);
+  }
+  }
 
 
   close(fd_answer);
