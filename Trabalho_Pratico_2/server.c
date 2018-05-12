@@ -62,9 +62,13 @@ int main(int argc, char* argv[]){
   //Reading FIFO
   while(!timeout) {
     if(buffer[0].processed) {
-      if(read(requests, &request, sizeof(struct Request)) < 0) {
+      if(read(requests, &request, sizeof(struct Request)) < 0 && errno != EAGAIN) {
         perror("READ");
       }
+      // printf("%d, %d, %d\n",request.clientID, request.num_wanted_seats, request.num_prefered_seats);
+      // for(i = 0; i < request.num_prefered_seats; i++){
+      //   printf("%d\n", request.prefered_seats[i]);
+      // }
       buffer[0] = request;
     }
   }
@@ -141,6 +145,7 @@ void alarm_handler(int signo) {
 }
 
 void *ticketOffice(void *arg) {
+  printf("yo");
   int t_no = (int) arg;
   struct Request r;
   while(!timeout) {
@@ -156,6 +161,7 @@ void *ticketOffice(void *arg) {
 
       char fifo_name[MAX_BUFFER_SIZE];
       answerFifoName(fifo_name, r.clientID);
+      printf("%s",fifo_name);
 
       int fd = open(fifo_name, O_WRONLY);
       if (fd < 0) {

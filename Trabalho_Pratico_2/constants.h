@@ -18,3 +18,4 @@
 #define WIDTH_PID 5
 #define WIDTH_XXNN 5
 #define MAX_BUFFER_SIZE 500
+#define FIFO_SERVER "requests" 

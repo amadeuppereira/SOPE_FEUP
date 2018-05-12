@@ -1,7 +1,8 @@
 #include "client.h"
 
 int timeout = 0;
-char fifo_name[10];
+char fifo_name[MAX_BUFFER_SIZE];
+int num_prefered_seats = 0;
 
 int main(int argc, char* argv[]){
   if (argc < 2) {
@@ -48,7 +49,7 @@ int main(int argc, char* argv[]){
   alarm(time_out);
 
   //Writing to FIFO requests
-  int requests=open("requests", O_WRONLY);
+  int requests=open(FIFO_SERVER, O_WRONLY);
   if(requests == -1){
    printf("Ticket offices closed!\n");
    exit(1);
@@ -57,7 +58,12 @@ int main(int argc, char* argv[]){
   struct Request request;
   request.clientID = getpid();
   request.num_wanted_seats = num_wanted_seats;
-  //request.prefered_seats = pref_seat_list;
+  request.num_prefered_seats = num_prefered_seats;
+  int i;
+  for(i = 0; i < MAX_PREFERED_SEATS; i++){
+    request.prefered_seats[i] = pref_seat_list[i];
+  }
+  //request.processed = 1;
 
   write(requests, &request, sizeof(struct Request));
   close(requests);
@@ -81,19 +87,19 @@ int readParameters(int *time_out, int *num_wanted_seats, int pref_seat_list[], c
   *num_wanted_seats = atoi(argv[2]);
   
   char newString[sizeof(argv[3])][sizeof(argv[3])];
-  int i, j=0, ctr=0;
+  int i, j=0;
   for(i=0; i <= (strlen(argv[3])); i++){
     if(argv[3][i] == ' ' || argv[3][i]=='\0'){
-      newString[ctr][j]='\0';
-      ctr++;
+      newString[num_prefered_seats][j]='\0';
+      num_prefered_seats++;
       j=0;
     }
     else{
-      newString[ctr][j]= argv[3][i];
+      newString[num_prefered_seats][j]= argv[3][i];
       j++;
     }
   }
-  for(i=0;i < ctr;i++){
+  for(i=0;i < num_prefered_seats;i++){
     pref_seat_list[i] = atoi(newString[i]);
   }
 
