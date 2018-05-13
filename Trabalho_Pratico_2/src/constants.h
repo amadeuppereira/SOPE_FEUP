@@ -35,6 +35,9 @@
 #define FUL -6
 #define OUT -7
 
+/**
+ * @brief Struct with a request's information
+ */
 struct Request {
   int processed;
 
