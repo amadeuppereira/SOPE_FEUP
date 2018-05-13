@@ -100,8 +100,8 @@ int readParameters(int *num_room_seats, int *num_ticket_offices, int *open_time,
 
 void createSeats(int num_room_seats) {
   int n;
-  for(n = 0; n < num_room_seats; n++){
-    roomSeats[n].seatNumber = n + 1;
+  for(n = 1; n <= num_room_seats; n++){
+    roomSeats[n].seatNumber = n;
     roomSeats[n].occupied = 0;
     roomSeats[n].clientID = 0;
   }
@@ -366,9 +366,9 @@ void sbookReservations() {
 
   int i;
   for(i = 1; i <= num_room_seats; i++) {
-    if(!roomSeats[i].occupied) {
+    if(roomSeats[i].occupied) {
       char seat[WIDTH_SEAT + 1];
-      getFullSeatNumber(seat, i+1);
+      getFullSeatNumber(seat, i);
       fprintf(sbook, "%s\n", seat);
     }
   }

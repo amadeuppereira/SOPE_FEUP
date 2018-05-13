@@ -17,6 +17,8 @@ int main(int argc, char* argv[]){
     return 1;
   }
 
+  clog_file = fopen(CLIENT_LOG, "w");
+
   //Alarm handler
   struct sigaction action;
   action.sa_handler = alarm_handler;
@@ -78,11 +80,15 @@ int main(int argc, char* argv[]){
   }
   }
 
-
   close(fd_answer);
+
+  clogAnswer(ret, num_wanted_seats, reserved_seats);
+  cbookReservations(ret, num_wanted_seats, reserved_seats);
 
   //Destroying FIFO
   destroyFIFO(fifo_name);
+
+  fclose(clog_file);
 
   return 0;
 }
@@ -158,4 +164,69 @@ void getFullClientId(char *fn, int id) {
     sprintf(fn, "%s%d", fn, 0);
   }
   sprintf(fn, "%s%s", fn, clientID_s);
+}
+
+void getFullSeatNumber(char *fn, int n) {
+  sprintf(fn, "");
+  char seat[WIDTH_SEAT + 1];
+  sprintf(seat, "%d", n);
+  int i;
+  for(i = strlen(seat); i < WIDTH_SEAT; i++) {
+    sprintf(fn, "%s%d", fn, 0);
+  }
+  sprintf(fn, "%s%s", fn, seat);
+}
+
+// WRITE TO FILE FUNCTIONS
+
+void clogAnswer(int ret, int num_wanted_seats, int * reserved_seats) {
+
+  char clientID_s[WIDTH_PID + 1];
+  getFullClientId(clientID_s, getpid());
+
+  if(ret < 0){
+    fprintf(clog_file, "%s ", clientID_s);
+    switch(ret) {
+      case -1: fprintf(clog_file, "MAX"); break;
+      case -2: fprintf(clog_file, "NST"); break;
+      case -3: fprintf(clog_file, "IID"); break;
+      case -4: fprintf(clog_file, "ERR"); break;
+      case -5: fprintf(clog_file, "NAV"); break;
+      case -6: fprintf(clog_file, "FUL"); break;
+      default: break;
+    }
+  }
+  else{
+    int i;
+    for(i = 0; i < num_wanted_seats; i++) {
+      fprintf(clog_file, "%s ", clientID_s);
+      if(i < 10)
+        fprintf(clog_file, "0");
+      fprintf(clog_file, "%d.", i + 1);
+
+      if(num_wanted_seats < 10)
+        fprintf(clog_file, "0");
+      fprintf(clog_file, "%d", num_wanted_seats);
+
+      char seat[WIDTH_SEAT + 1];
+      getFullSeatNumber(seat, reserved_seats[i]);
+      fprintf(clog_file, " %s\n", seat);
+    }
+  }
+}
+
+void cbookReservations(int ret, int num_wanted_seats, int * reserved_seats) {
+
+  if(ret >= 0){
+    FILE *cbook = fopen(CLIENT_BOOKINGS, "w");
+
+    int i;
+    for(i = 0; i < num_wanted_seats; i++) {
+      char seat[WIDTH_SEAT + 1];
+      getFullSeatNumber(seat, reserved_seats[i]);
+      fprintf(cbook, "%s\n", seat);
+    }
+
+    fclose(cbook);
+  }
 }
