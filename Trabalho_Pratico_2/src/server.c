@@ -159,7 +159,7 @@ void *ticketOffice(void *arg) {
 
       int fd = open(fifo_name, O_WRONLY);
       if (fd < 0) {
-        ret = -7;
+        ret = OUT;
         int i;
         for(i = 0; i < r.num_wanted_seats; i++) {
           freeSeat(roomSeats, reserved_seats[i]);
@@ -230,22 +230,22 @@ int isRoomFull() {
 int checkRequest(struct Request r, int reserved_seats[]) {
   
   if(r.num_wanted_seats > MAX_CLI_SEATS) {
-    return -1;
+    return MAX;
   }
 
   if(!(r.num_prefered_seats >= r.num_wanted_seats && r.num_prefered_seats <= MAX_CLI_SEATS)) {
-    return -2;
+    return NST;
   }
 
   if(isRoomFull()) {
-    return -6;
+    return FUL;
   }
 
   int i, num_reserved_seats = 0;
   for(i = 0; i < r.num_prefered_seats; i++) {
     if(!(r.prefered_seats[i] > 0 && r.prefered_seats[i] <= num_room_seats)) {
       freeSeats(num_reserved_seats, reserved_seats);
-      return -3;
+      return IID;
     }
 
     if(isSeatFree(roomSeats, r.prefered_seats[i]) && num_reserved_seats < r.num_wanted_seats) {
@@ -257,11 +257,11 @@ int checkRequest(struct Request r, int reserved_seats[]) {
 
   if(num_reserved_seats < r.num_wanted_seats) {
     freeSeats(num_reserved_seats, reserved_seats);
-    return -5;
+    return NAV;
   }
 
   if(r.num_wanted_seats < 0 || r.clientID < 0) {
-    return -4;
+    return ERR;
   }
 
   return 0;
@@ -374,13 +374,13 @@ void slogRequest(int no, struct Request r, int ret, int reserved_seats[]) {
   fprintf(slog, "- ");
 
   switch(ret) {
-    case -1: fprintf(slog, "MAX"); break;
-    case -2: fprintf(slog, "NST"); break;
-    case -3: fprintf(slog, "IID"); break;
-    case -4: fprintf(slog, "ERR"); break;
-    case -5: fprintf(slog, "NAV"); break;
-    case -6: fprintf(slog, "FUL"); break;
-    case -7: fprintf(slog, "OUT"); break;
+    case MAX: fprintf(slog, "MAX"); break;
+    case NST: fprintf(slog, "NST"); break;
+    case IID: fprintf(slog, "IID"); break;
+    case ERR: fprintf(slog, "ERR"); break;
+    case NAV: fprintf(slog, "NAV"); break;
+    case FUL: fprintf(slog, "FUL"); break;
+    case OUT: fprintf(slog, "OUT"); break;
     case 0:
       for(i = 0; i < r.num_wanted_seats; i++) {
         char seat[WIDTH_SEAT + 1];

@@ -27,6 +27,14 @@
 #define CLIENTS_LOG "clog.txt"
 #define CLIENTS_BOOKINGS "cbook.txt"
 
+#define MAX -1
+#define NST -2
+#define IID -3
+#define ERR -4
+#define NAV -5
+#define FUL -6
+#define OUT -7
+
 struct Request {
   int processed;
 

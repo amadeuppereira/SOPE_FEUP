@@ -70,7 +70,7 @@ int main(int argc, char* argv[]){
   while((n = read(fd_answer, &ret, sizeof(int))) <= 0 && !timeout);
   alarm(0);
 
-  if(timeout) ret = -7;
+  if(timeout) ret = OUT;
 
   if(ret >= 0) {
     for(i = 0; i < num_wanted_seats; i++) {
@@ -201,13 +201,13 @@ void clogAnswer(int ret, int num_wanted_seats, int * reserved_seats) {
   int i;
 
   switch(ret) {
-    case -1: fprintf(clog_file, "%s MAX\n", clientID_s); break;
-    case -2: fprintf(clog_file, "%s NST\n", clientID_s); break;
-    case -3: fprintf(clog_file, "%s IID\n", clientID_s); break;
-    case -4: fprintf(clog_file, "%s ERR\n", clientID_s); break;
-    case -5: fprintf(clog_file, "%s NAV\n", clientID_s); break;
-    case -6: fprintf(clog_file, "%s FUL\n", clientID_s); break;
-    case -7: fprintf(clog_file, "%s OUT\n", clientID_s); break;
+    case MAX: fprintf(clog_file, "%s MAX\n", clientID_s); break;
+    case NST: fprintf(clog_file, "%s NST\n", clientID_s); break;
+    case IID: fprintf(clog_file, "%s IID\n", clientID_s); break;
+    case ERR: fprintf(clog_file, "%s ERR\n", clientID_s); break;
+    case NAV: fprintf(clog_file, "%s NAV\n", clientID_s); break;
+    case FUL: fprintf(clog_file, "%s FUL\n", clientID_s); break;
+    case OUT: fprintf(clog_file, "%s OUT\n", clientID_s); break;
     default:
       for(i = 0; i < num_wanted_seats; i++) {
         char xxnn[WIDTH_XXNN + 1];
