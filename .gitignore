@@ -54,3 +54,4 @@ dkms.conf
 test
 test.c
 src/logfile.txt
+.vscode/

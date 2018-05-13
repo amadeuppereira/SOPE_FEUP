@@ -38,6 +38,8 @@ int main(int argc, char* argv[]){
      }
     return 3;
   }
+
+  resetClientFiles();
   
   struct Request request;
   request.processed = 1;
@@ -58,14 +60,13 @@ int main(int argc, char* argv[]){
       return 5;
     }
   }
-  
   //Reading FIFO
+  int n;
   while(!timeout) {
     if(buffer[0].processed) {
-      if(read(requests, &request, sizeof(struct Request)) < 0 && errno != EAGAIN) {
-        perror("READ");
+      if((n = read(requests, &request, sizeof(struct Request))) > 0) {
+        buffer[0] = request;
       }
-      buffer[0] = request;
     }
   }
   
@@ -83,6 +84,10 @@ int main(int argc, char* argv[]){
     return 4;
   }
 
+  pthread_mutex_destroy(&mut);
+  pthread_mutex_destroy(&mut_files);
+
+  fprintf(slog, "SERVER CLOSED");
   fclose(slog);
   return 0;
 }
@@ -100,8 +105,8 @@ int readParameters(int *num_room_seats, int *num_ticket_offices, int *open_time,
 
 void createSeats(int num_room_seats) {
   int n;
-  for(n = 1; n <= num_room_seats; n++){
-    roomSeats[n].seatNumber = n;
+  for(n = 0; n < num_room_seats; n++){
+    roomSeats[n].seatNumber = n+1;
     roomSeats[n].occupied = 0;
     roomSeats[n].clientID = 0;
   }
@@ -147,7 +152,6 @@ void *ticketOffice(void *arg) {
 
       int reserved_seats[r.num_wanted_seats];
       int ret = checkRequest(r, reserved_seats);
-      slogRequest(t_no, r, ret, reserved_seats);
       pthread_mutex_unlock(&mut);
 
       char fifo_name[MAX_BUFFER_SIZE];
@@ -155,20 +159,28 @@ void *ticketOffice(void *arg) {
 
       int fd = open(fifo_name, O_WRONLY);
       if (fd < 0) {
-        printf("FIFO '%s' failed to open in WRITEONLY mode\n", fifo_name);
-        exit(1);
-      }
-
-      if (ret < 0) {
-        write(fd, &ret, sizeof(int));
-      }
-      else {
-        write(fd, &r.num_wanted_seats, sizeof(int));
+        ret = -7;
         int i;
-        for (i = 0; i < r.num_wanted_seats; i++) {
-          write(fd, &reserved_seats[i], sizeof(int));
+        for(i = 0; i < r.num_wanted_seats; i++) {
+          freeSeat(roomSeats, reserved_seats[i]);
         }
       }
+      else {
+        if (ret < 0) {
+          write(fd, &ret, sizeof(int));
+        }
+        else {
+          write(fd, &r.num_wanted_seats, sizeof(int));
+          int i;
+          for (i = 0; i < r.num_wanted_seats; i++) {
+            write(fd, &reserved_seats[i], sizeof(int));
+          }
+        }
+      }
+
+      pthread_mutex_lock(&mut_files);
+      slogRequest(t_no, r, ret, reserved_seats);
+      pthread_mutex_unlock(&mut_files);
     }
     else {
       pthread_mutex_unlock(&mut);
@@ -225,11 +237,17 @@ int checkRequest(struct Request r, int reserved_seats[]) {
     return -2;
   }
 
+  if(isRoomFull()) {
+    return -6;
+  }
+
   int i, num_reserved_seats = 0;
   for(i = 0; i < r.num_prefered_seats; i++) {
     if(!(r.prefered_seats[i] > 0 && r.prefered_seats[i] <= num_room_seats)) {
+      freeSeats(num_reserved_seats, reserved_seats);
       return -3;
     }
+
     if(isSeatFree(roomSeats, r.prefered_seats[i]) && num_reserved_seats < r.num_wanted_seats) {
       bookSeat(roomSeats, r.prefered_seats[i], r.clientID);
       reserved_seats[num_reserved_seats] = r.prefered_seats[i];
@@ -238,10 +256,7 @@ int checkRequest(struct Request r, int reserved_seats[]) {
   }
 
   if(num_reserved_seats < r.num_wanted_seats) {
-    for(i = 0; i < num_reserved_seats; i++) {
-      freeSeat(roomSeats, reserved_seats[i]);
-    }
-
+    freeSeats(num_reserved_seats, reserved_seats);
     return -5;
   }
 
@@ -249,11 +264,14 @@ int checkRequest(struct Request r, int reserved_seats[]) {
     return -4;
   }
 
-  if(isRoomFull()) {
-    return -6;
-  }
-
   return 0;
+}
+
+void freeSeats(int n, int seats[]) {
+  int i;
+  for(i = 0; i < n; i++) {
+      freeSeat(roomSeats, seats[i]);
+    }
 }
 
 int isSeatFree(struct Seat *seats, int seatNum){
@@ -282,6 +300,8 @@ void bookSeat(struct Seat * seats, int seatNum, int clientID){
       if(seats->occupied == 0){
         seats->occupied = 1;
         seats->clientID = clientID;
+        DELAY();
+        return;
       }
     }
     seats++;
@@ -294,6 +314,8 @@ void freeSeat(struct Seat *seats, int seatNum){
   for(i = 0; i < num_room_seats; i++){
     if(seats->seatNumber == seatNum){
       seats->occupied = 0;
+      DELAY();
+      return;
     }
     seats++;
   }
@@ -301,6 +323,16 @@ void freeSeat(struct Seat *seats, int seatNum){
 }
 
 // WRITE TO FILE FUNCTIONS
+
+void resetClientFiles() {
+  FILE *f = fopen(CLIENTS_BOOKINGS, "w");
+  fprintf(f, "");
+  fclose(f);
+
+  f = fopen(CLIENTS_LOG, "w");
+  fprintf(f, "");
+  fclose(f);
+}
 
 void slogOpenClose(int no, int open) {
   if(no < 10)
@@ -323,16 +355,17 @@ void slogRequest(int no, struct Request r, int ret, int reserved_seats[]) {
 
   if(r.num_wanted_seats < 10)
     fprintf(slog, "0");
-  fprintf(slog, "%d: ", no);  
+  fprintf(slog, "%d: ", r.num_wanted_seats);  
 
   int i, j;
   for(i = 0; i < r.num_prefered_seats; i++) {
     char seat[WIDTH_SEAT + 1];
     getFullSeatNumber(seat, r.prefered_seats[i]);
     fprintf(slog, "%s ", seat);
+    if(i == MAX_CLI_SEATS - 1) break;
   }
 
-  for(i = 0; i < r.num_prefered_seats - MAX_CLI_SEATS; i++) {
+  for(i = 0; i < MAX_CLI_SEATS - r.num_prefered_seats; i++) {
     for(j = 0; j <= WIDTH_SEAT; j++) {
       fprintf(slog, " ");
     }
@@ -347,15 +380,22 @@ void slogRequest(int no, struct Request r, int ret, int reserved_seats[]) {
     case -4: fprintf(slog, "ERR"); break;
     case -5: fprintf(slog, "NAV"); break;
     case -6: fprintf(slog, "FUL"); break;
+    case -7: fprintf(slog, "OUT"); break;
     case 0:
       for(i = 0; i < r.num_wanted_seats; i++) {
         char seat[WIDTH_SEAT + 1];
-        getFullSeatNumber(seat, r.prefered_seats[i]);
+        getFullSeatNumber(seat, reserved_seats[i]);
         fprintf(slog, "%s ", seat);
+      }
+
+      for(i = 0; i < MAX_CLI_SEATS - r.num_wanted_seats; i++) {
+        for(j = 0; j <= WIDTH_SEAT; j++) {
+          fprintf(slog, " ");
+        }
       }
     default: break;
   }
-
+ 
   fprintf(slog, "\n");
 
 }
@@ -365,13 +405,12 @@ void sbookReservations() {
   FILE *sbook = fopen(SERVER_BOOKINGS, "w");
 
   int i;
-  for(i = 1; i <= num_room_seats; i++) {
+  for(i = 0; i < num_room_seats; i++) {
     if(roomSeats[i].occupied) {
       char seat[WIDTH_SEAT + 1];
-      getFullSeatNumber(seat, i);
+      getFullSeatNumber(seat, i + 1);
       fprintf(sbook, "%s\n", seat);
     }
   }
-
   fclose(sbook);
 }

@@ -17,7 +17,14 @@ int main(int argc, char* argv[]){
     return 1;
   }
 
-  clog_file = fopen(CLIENT_LOG, "w");
+  //Opening FIFO's
+  int requests=open(FIFO_SERVER, O_WRONLY);
+  if(requests == -1){
+   printf("Ticket offices closed!\n");
+   return 2;
+  }
+
+  clog_file = fopen(CLIENTS_LOG, "a");
 
   //Alarm handler
   struct sigaction action;
@@ -34,13 +41,6 @@ int main(int argc, char* argv[]){
       printf("FIFO '%s' already exists\n", fifo_name);
     else
       printf("Can't create FIFO\n");
-  }
-
-  //Opening FIFO's
-  int requests=open(FIFO_SERVER, O_WRONLY);
-  if(requests == -1){
-   printf("Ticket offices closed!\n");
-   return 2;
   }
 
   int fd_answer;
@@ -67,17 +67,16 @@ int main(int argc, char* argv[]){
   close(requests);
 
   int ret, n, reserved_seats[num_wanted_seats];
-  while((n = read(fd_answer, &ret, sizeof(int))) <= 0);
+  while((n = read(fd_answer, &ret, sizeof(int))) <= 0 && !timeout);
+  alarm(0);
 
-  printf("ret: %d\n", ret);
+  if(timeout) ret = -7;
+
   if(ret >= 0) {
     for(i = 0; i < num_wanted_seats; i++) {
       while((n = read(fd_answer, &ret, sizeof(int))) <= 0);
       reserved_seats[i] = ret;
     }
-    for(i = 0; i < num_wanted_seats; i++) {
-      printf("%d\n", reserved_seats[i]);
-  }
   }
 
   close(fd_answer);
@@ -141,12 +140,7 @@ int destroyFIFO(char* name) {
 }
 
 void alarm_handler(int signo) {
-  printf("timeout\n");
-
-  //Destroying FIFO
-  destroyFIFO(fifo_name);
-
-  exit(1);
+  timeout = 1;
 }
 
 void answerFifoName(char *name) {
@@ -177,6 +171,26 @@ void getFullSeatNumber(char *fn, int n) {
   sprintf(fn, "%s%s", fn, seat);
 }
 
+void getFullXXNN(char *fn, int n1, int n2) {
+  int width = (WIDTH_XXNN - 1) / 2;
+
+  sprintf(fn, "");
+  char fn1[width];
+  sprintf(fn1, "%d", n1);
+  int i;
+  for(i = strlen(fn1); i < width; i++) {
+    sprintf(fn, "%s%d", fn, 0);
+  }
+  sprintf(fn, "%s%d.", fn, n1);
+
+  char fn2[width];
+  sprintf(fn2, "%d", n2);
+  for(i = strlen(fn2); i < width; i++) {
+    sprintf(fn, "%s%d", fn, 0);
+  }
+  sprintf(fn, "%s%d", fn, n2);
+}
+
 // WRITE TO FILE FUNCTIONS
 
 void clogAnswer(int ret, int num_wanted_seats, int * reserved_seats) {
@@ -184,41 +198,34 @@ void clogAnswer(int ret, int num_wanted_seats, int * reserved_seats) {
   char clientID_s[WIDTH_PID + 1];
   getFullClientId(clientID_s, getpid());
 
-  if(ret < 0){
-    fprintf(clog_file, "%s ", clientID_s);
-    switch(ret) {
-      case -1: fprintf(clog_file, "MAX"); break;
-      case -2: fprintf(clog_file, "NST"); break;
-      case -3: fprintf(clog_file, "IID"); break;
-      case -4: fprintf(clog_file, "ERR"); break;
-      case -5: fprintf(clog_file, "NAV"); break;
-      case -6: fprintf(clog_file, "FUL"); break;
-      default: break;
-    }
-  }
-  else{
-    int i;
-    for(i = 0; i < num_wanted_seats; i++) {
-      fprintf(clog_file, "%s ", clientID_s);
-      if(i < 10)
-        fprintf(clog_file, "0");
-      fprintf(clog_file, "%d.", i + 1);
+  int i;
 
-      if(num_wanted_seats < 10)
-        fprintf(clog_file, "0");
-      fprintf(clog_file, "%d", num_wanted_seats);
+  switch(ret) {
+    case -1: fprintf(clog_file, "%s MAX\n", clientID_s); break;
+    case -2: fprintf(clog_file, "%s NST\n", clientID_s); break;
+    case -3: fprintf(clog_file, "%s IID\n", clientID_s); break;
+    case -4: fprintf(clog_file, "%s ERR\n", clientID_s); break;
+    case -5: fprintf(clog_file, "%s NAV\n", clientID_s); break;
+    case -6: fprintf(clog_file, "%s FUL\n", clientID_s); break;
+    case -7: fprintf(clog_file, "%s OUT\n", clientID_s); break;
+    default:
+      for(i = 0; i < num_wanted_seats; i++) {
+        char xxnn[WIDTH_XXNN + 1];
+        getFullXXNN(xxnn, i+1, num_wanted_seats);
 
-      char seat[WIDTH_SEAT + 1];
-      getFullSeatNumber(seat, reserved_seats[i]);
-      fprintf(clog_file, " %s\n", seat);
-    }
+        char seat[WIDTH_SEAT + 1];
+        getFullSeatNumber(seat, reserved_seats[i]);
+
+        fprintf(clog_file, "%s %s %s\n", clientID_s, xxnn, seat);
+      }
+      break;
   }
-}
+} 
 
 void cbookReservations(int ret, int num_wanted_seats, int * reserved_seats) {
 
   if(ret >= 0){
-    FILE *cbook = fopen(CLIENT_BOOKINGS, "w");
+    FILE *cbook = fopen(CLIENTS_BOOKINGS, "a");
 
     int i;
     for(i = 0; i < num_wanted_seats; i++) {
