@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/sem.h> 
+#include <semaphore.h>
 
 #define MAX_ROOM_SEATS 9999
 #define MAX_CLI_SEATS 99

@@ -4,18 +4,20 @@ int num_room_seats;
 int timeout = 0;
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mut_files = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mut_seats[MAX_ROOM_SEATS];
+sem_t sem;
 FILE *slog;
 
 /**
  * @brief Struct holding all the information for a seat
  */
-struct Seat{
+typedef struct {
   int seatNumber;
   int occupied; //0 - free, 1 - occupied
   int clientID;
-};
+} Seat;
 
-struct Seat roomSeats[MAX_ROOM_SEATS];
+Seat roomSeats[MAX_ROOM_SEATS];
 struct Request buffer[1];
 
 /**
@@ -35,6 +37,20 @@ int readParameters(int *num_room_seats, int *num_ticket_offices, int *open_time,
  * @param num_room_seats number of seats
  */
 void createSeats(int num_room_seats);
+
+/**
+ * @brief Destroy all the mutexes created and the semaphore
+ * 
+ * @param num number of seat mutexes
+ */
+void destroyMutexesSem(int num);
+
+/**
+ * @brief Initializa the seat mutexes and the semaphore
+ * 
+ * @param num number of mutexes
+ */
+void initializeMutexesSem(int num);
 
 /**
  * @brief Creates a fifo with a given name
@@ -79,31 +95,50 @@ void *ticketOffice(void *arg);
 /**
  * @brief Check if a seat is free
  * 
- * @param seats pointer for the Seat array to go through
+ * @param seats pointer for the Seat array
  * @param seatNum seat number to check
  * @return int 1 if free, 0 otherwise
  */
-int isSeatFree(struct Seat *seats, int seatNum);
+int isSeatFree(Seat *seats, int seatNum);
+
+/**
+ * @brief Same as isSeatFree, but locks mutexe
+ * 
+ * @param seats pointer for the Seat array
+ * @param seatNum seat number to check
+ * @return int 1 if free, 0 otherwise
+ */
+int is_seat_free(Seat * seats, int seatNum);
 
 /**
  * @brief Book a seat
  * 
- * @param seats pointer for the Seat array to go through
+ * @param seats pointer for the Seat array
  * @param seatNum seat number to book
  * @param clientID client id that booked the seat
  */
-void bookSeat(struct Seat * seats, int seatNum, int clientID);
+void bookSeat(Seat * seats, int seatNum, int clientID);
+
+/**
+ * @brief Same as bookSeat but return a value if already reserved
+ * 
+ * @param seats pointer for the Seat array
+ * @param seatNum seat number to book
+ * @param clientID client id that booked the seat
+ * @return int 0 if sucess, 1 otherwise
+ */
+int book_seat(Seat * seats, int seatNum, int clientID);
 
 /**
  * @brief Free a seat
  * 
- * @param seats pointer for the Seat array to go through
+ * @param seats pointer for the Seat
  * @param seatNum seat number to free
  */
-void freeSeat(struct Seat *seats, int seatNum);
+void freeSeat(Seat *seats, int seatNum);
 
 /**
- * @brief Free a given number of seats
+ * @brief Free a given number of seats locking the respective mutex
  * 
  * @param n number of seats to free
  * @param seats array with the seat numbers to free

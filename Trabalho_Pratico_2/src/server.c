@@ -24,6 +24,7 @@ int main(int argc, char* argv[]){
   
   //Creating the Room Seats
   createSeats(num_room_seats);
+  initializeMutexesSem(num_room_seats);
 
   //Making FIFO
   if(createFIFO(FIFO_SERVER) != 0)
@@ -62,11 +63,13 @@ int main(int argc, char* argv[]){
   }
   //Reading FIFO
   int n;
-  while(!timeout) {
+  while(1) {
     if(buffer[0].processed) {
       if((n = read(requests, &request, sizeof(struct Request))) > 0) {
         buffer[0] = request;
+        sem_post(&sem);
       }
+      else if(timeout) break;
     }
   }
   
@@ -84,8 +87,7 @@ int main(int argc, char* argv[]){
     return 4;
   }
 
-  pthread_mutex_destroy(&mut);
-  pthread_mutex_destroy(&mut_files);
+  destroyMutexesSem(num_room_seats);
 
   fprintf(slog, "SERVER CLOSED");
   fclose(slog);
@@ -97,7 +99,7 @@ int readParameters(int *num_room_seats, int *num_ticket_offices, int *open_time,
   *num_ticket_offices = atoi(argv[2]);
   *open_time = atoi(argv[3]);
 
-  if(*num_room_seats <= 0 || *num_ticket_offices <= 0 || *open_time <= 0)
+  if(*num_room_seats <= 0 || *num_room_seats > MAX_ROOM_SEATS || *num_ticket_offices <= 0 || *open_time <= 0)
     return 1;
   
   return 0;
@@ -110,6 +112,28 @@ void createSeats(int num_room_seats) {
     roomSeats[n].occupied = 0;
     roomSeats[n].clientID = 0;
   }
+}
+
+void initializeMutexesSem(int num) {
+  int i;
+  for(i = 0; i < num; i++) {
+    sem_post(&sem);
+    pthread_mutex_init(&mut_seats[i], NULL);
+  }
+
+  sem_init(&sem, 0, 1);
+}
+
+void destroyMutexesSem(int num) {
+  pthread_mutex_destroy(&mut);
+  pthread_mutex_destroy(&mut_files);
+
+  int i;
+  for(i = 0; i < num; i++) {
+    pthread_mutex_destroy(&mut_seats[i]);
+  }
+
+  sem_destroy(&sem);
 }
 
 int createFIFO(char *name) {
@@ -143,27 +167,24 @@ void *ticketOffice(void *arg) {
   int t_no = (int) arg;
   struct Request r;
   while(!timeout) {
-    int status = pthread_mutex_trylock(&mut);
-    if(status == EBUSY) continue;
-    while(buffer[0].processed && !timeout) {}
+    pthread_mutex_lock(&mut);
+    sem_wait(&sem);
+    //while(buffer[0].processed && !timeout) {}
     if (!buffer[0].processed) {
       r = buffer[0];
       buffer[0].processed = 1;
+      pthread_mutex_unlock(&mut);
 
       int reserved_seats[r.num_wanted_seats];
       int ret = checkRequest(r, reserved_seats);
-      pthread_mutex_unlock(&mut);
-
+      
       char fifo_name[MAX_BUFFER_SIZE];
       answerFifoName(fifo_name, r.clientID);
 
       int fd = open(fifo_name, O_WRONLY);
       if (fd < 0) {
         ret = OUT;
-        int i;
-        for(i = 0; i < r.num_wanted_seats; i++) {
-          freeSeat(roomSeats, reserved_seats[i]);
-        }
+        freeSeats(r.num_wanted_seats, reserved_seats);
       }
       else {
         if (ret < 0) {
@@ -220,7 +241,7 @@ void getFullSeatNumber(char *fn, int n) {
 int isRoomFull() {
   int i;
   for(i = 0; i < num_room_seats; i++) {
-    if(isSeatFree(roomSeats, i)) {
+    if(is_seat_free(roomSeats, i+1)) {
       return 0;
     }
   }
@@ -237,19 +258,20 @@ int checkRequest(struct Request r, int reserved_seats[]) {
     return NST;
   }
 
+  int i, num_reserved_seats = 0;
+  for(i = 0; i < r.num_prefered_seats; i++) {
+    if(!(r.prefered_seats[i] > 0 && r.prefered_seats[i] <= num_room_seats)) {
+      return IID;
+    }
+  }
+
   if(isRoomFull()) {
     return FUL;
   }
 
-  int i, num_reserved_seats = 0;
   for(i = 0; i < r.num_prefered_seats; i++) {
-    if(!(r.prefered_seats[i] > 0 && r.prefered_seats[i] <= num_room_seats)) {
-      freeSeats(num_reserved_seats, reserved_seats);
-      return IID;
-    }
-
-    if(isSeatFree(roomSeats, r.prefered_seats[i]) && num_reserved_seats < r.num_wanted_seats) {
-      bookSeat(roomSeats, r.prefered_seats[i], r.clientID);
+    if(is_seat_free(roomSeats, r.prefered_seats[i]) && num_reserved_seats < r.num_wanted_seats) {
+      if(book_seat(roomSeats, r.prefered_seats[i], r.clientID) != 0) continue;
       reserved_seats[num_reserved_seats] = r.prefered_seats[i];
       num_reserved_seats++;
     }
@@ -270,56 +292,52 @@ int checkRequest(struct Request r, int reserved_seats[]) {
 void freeSeats(int n, int seats[]) {
   int i;
   for(i = 0; i < n; i++) {
-      freeSeat(roomSeats, seats[i]);
-    }
+    pthread_mutex_lock(&mut_seats[seats[i]-1]);
+    freeSeat(roomSeats, seats[i]);
+    pthread_mutex_unlock(&mut_seats[seats[i]-1]);
+  }
 }
 
-int isSeatFree(struct Seat *seats, int seatNum){
-  int i;
-  for(i = 0; i < num_room_seats; i++){
-    if(seats->seatNumber == seatNum){
-      if(seats->occupied == 0){
-        DELAY();
-        return 1;
-      }
-      else{
-        DELAY();
-        return 0;
-      }
-    }
-    seats++;
-  }
+int isSeatFree(Seat *seats, int seatNum){
+
   DELAY();
-  return 0;
+  if(seats[seatNum-1].occupied)
+    return 0;
+
+  return 1;
 }
 
-void bookSeat(struct Seat * seats, int seatNum, int clientID){
-  int i;
-  for(i = 0; i < num_room_seats; i++){
-    if(seats->seatNumber == seatNum){
-      if(seats->occupied == 0){
-        seats->occupied = 1;
-        seats->clientID = clientID;
-        DELAY();
-        return;
-      }
-    }
-    seats++;
-  }
-  DELAY();
+int is_seat_free(Seat * seats, int seatNum) {
+  int ret;
+  pthread_mutex_lock(&mut_seats[seatNum-1]);
+  ret = isSeatFree(seats, seatNum);
+  pthread_mutex_unlock(&mut_seats[seatNum-1]);
+  return ret;
 }
 
-void freeSeat(struct Seat *seats, int seatNum){
-  int i;
-  for(i = 0; i < num_room_seats; i++){
-    if(seats->seatNumber == seatNum){
-      seats->occupied = 0;
-      DELAY();
-      return;
-    }
-    seats++;
-  }
+void bookSeat(Seat * seats, int seatNum, int clientID){
+
   DELAY();
+  seats[seatNum-1].occupied = 1;
+  seats[seatNum-1].clientID = clientID;
+}
+
+int book_seat(Seat * seats, int seatNum, int clientID) {
+  int ret = 0;
+
+  pthread_mutex_lock(&mut_seats[seatNum-1]);
+  if(seats[seatNum - 1].occupied) ret = 1;
+  else bookSeat(seats, seatNum, clientID);
+  pthread_mutex_unlock(&mut_seats[seatNum-1]);
+
+  return ret;
+}
+
+void freeSeat(Seat *seats, int seatNum){
+
+  DELAY();
+  seats[seatNum-1].occupied = 0;
+
 }
 
 // WRITE TO FILE FUNCTIONS
