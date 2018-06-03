@@ -76,6 +76,7 @@ int main(int argc, char* argv[]){
   close(requests);
 
   for(i = 0; i < num_ticket_offices; i++) {
+    sem_post(&sem);
     pthread_join(tid[i], NULL);
     slogOpenClose(i+1, 0);
   }
@@ -117,7 +118,6 @@ void createSeats(int num_room_seats) {
 void initializeMutexesSem(int num) {
   int i;
   for(i = 0; i < num; i++) {
-    sem_post(&sem);
     pthread_mutex_init(&mut_seats[i], NULL);
   }
 
